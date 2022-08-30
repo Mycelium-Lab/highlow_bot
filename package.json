@@ -1,0 +1,26 @@
+{
+  "name": "fair-p2p-game_bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mycelium-Lab/highlow_bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Mycelium-Lab/highlow_bot/issues"
+  },
+  "homepage": "https://github.com/Mycelium-Lab/highlow_bot#readme",
+  "dependencies": {
+    "@alch/alchemy-web3": "^1.4.6",
+    "dotenv": "^16.0.1",
+    "ethers": "^5.7.0",
+    "node-cron": "^3.0.2"
+  }
+}
