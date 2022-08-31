@@ -40,7 +40,7 @@ async function updateAddSended(range, add) {
                             values: [[,amountUpdate.toString(),,gamesAmount]]
                 }
             })
-            console.log(`Added to Google Sheets`)
+            console.log(`Added Sended Amount to Google Sheets`)
         })
         .catch((e) => {
             console.log(e)
@@ -67,7 +67,7 @@ async function updateAddWinned(range, add) {
                             values: [[,,amountUpdate.toString()]]
                 }
             })
-            console.log(`Added to Google Sheets`)
+            console.log(`Added Winned Amount to Google Sheets`)
         })
         .catch((e) => {
             console.log(e)
