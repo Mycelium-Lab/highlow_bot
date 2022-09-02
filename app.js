@@ -7,13 +7,16 @@ const { updateAddSended, updateAddWinned } = require("./sheets")
 const { gameAddress, gameAddressTest } = require("./utils/constants.js")
 
 const seconds = 10
-const rangeBID = ['0.000001', '0.000002', '0.000003', '0.000004', '0.000005']
+const rangeBID = ['0.001', '0.002', '0.003', '0.004', '0.005']
 // const rangeBID = ['20', '0.000002', '0.000003', '0.000004', '200']
-const cronConfCreate = '*/4 * * * *' //every minute
+const cronConfCreate = '*/2 * * * *' //every minute
 const cronConfFinish = '*/30 * * * * *'
 
-//Provider Testnet
-const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_RINKEBY)
+//Provider Testnet Rinkeby
+// const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_RINKEBY)
+
+//Provider Testnet Emerald
+const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD_TESTNET)
 
 //Provider Emerald 
 // const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD)
@@ -78,7 +81,7 @@ const joinGame = async (gameID, bid) => {
     //bid in eth
     const bidAmount = ethers.utils.formatEther(bid.toString())
     //get amount of bids
-    const thisGameNumbers = await contract.getNumbers(gameID)
+    // const thisGameNumbers = await contract.getNumbers(gameID)
     //get random bot
     let randomBot = Math.floor(Math.random() * bots.length)
     //get participant of the game
@@ -248,13 +251,10 @@ cron.schedule(cronConfCreate, async () => {
 // }, 20000)
 
 console.log("Start listen address for event CreateGame: ", gameAddressTest)
+
 //Listen CreateGame event
-//get id of the game and wait 100 seconds
-//check if after 100 seconds bids not exists
-//create bid with bot
 contract.on('CreateGame', async (gameId, bid) => {
-    //check if after 100 seconds exists bid
-    //if bid not exists create with bot
+    //create bid
     setTimeout(async () => {
         await joinGame(gameId, bid)
     }, 1000 * seconds)
