@@ -4,25 +4,47 @@ require("dotenv").config()
 
 const contractJSON = require('./artifacts/contracts/Fair.sol/Fair.json')
 const { updateAddSended, updateAddWinned } = require("./sheets")
-const { gameAddress, gameAddressTest } = require("./utils/constants.js")
+const { 
+    gameAddressTestRinkeby, 
+    gameAddressTestEmerald,
+    gameAddressMainEmerald, 
+    rangeBIDTest,
+    rangeBIDMain,
+    appStateTestRinkeby,
+    appStateTestEmerald,
+    appStateMainEmerald
+ } = require("./utils/constants.js")
 
 const seconds = 10
-const rangeBID = ['0.001', '0.002', '0.003', '0.004', '0.005']
-// const rangeBID = ['20', '0.000002', '0.000003', '0.000004', '200']
-const cronConfCreate = '*/2 * * * *' //every minute
-const cronConfFinish = '*/30 * * * * *'
+const cronConfCreate = '*/4 * * * *'        //every 4 minute
+const cronConfFinish = '*/30 * * * * *'     //every 30 seconds
 
-//Provider Testnet Rinkeby
-// const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_RINKEBY)
-
-//Provider Testnet Emerald
-const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD_TESTNET)
-
-//Provider Emerald 
-// const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD)
-
-// Signer
-const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+let provider
+let contract
+let rangeBID = []
+let gameAddress
+if (process.env.APP_STATE == appStateTestRinkeby) {
+    provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_RINKEBY)
+    // Signer
+    const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+    contract = new ethers.Contract(gameAddressTestRinkeby, contractJSON.abi, signer)
+    gameAddress = gameAddressTestRinkeby
+    rangeBID = rangeBIDTest
+} else if (process.env.APP_STATE == appStateTestEmerald) {
+    provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD_TESTNET)
+    // Signer
+    const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+    contract = new ethers.Contract(gameAddressTestEmerald, contractJSON.abi, signer)
+    gameAddress = gameAddressTestEmerald
+    rangeBID = rangeBIDTest
+} else if (process.env.APP_STATE == appStateMainEmerald) {
+    provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_EMERALD)
+    // Signer
+    const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+    contract = new ethers.Contract(gameAddressMainEmerald, contractJSON.abi, signer)
+    gameAddress = gameAddressMainEmerald
+    rangeBID = rangeBIDMain
+}
 
 //bots range is place in googlee sheets
 const bots = [
@@ -68,11 +90,6 @@ const bots = [
     }
 ]
 
-// Contract Testnet
-const contract = new ethers.Contract(gameAddressTest, contractJSON.abi, signer);
-
-// Contract Emerald
-// const contract = new ethers.Contract(gameAddress, contractJSON.abi, signer);
 
 //join game
 const joinGame = async (gameID, bid) => {
@@ -80,37 +97,40 @@ const joinGame = async (gameID, bid) => {
     const randomNumber = Math.floor(Math.random() * 100) + 1
     //bid in eth
     const bidAmount = ethers.utils.formatEther(bid.toString())
-    //get amount of bids
-    // const thisGameNumbers = await contract.getNumbers(gameID)
-    //get random bot
-    let randomBot = Math.floor(Math.random() * bots.length)
-    //get participant of the game
-    let participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
-    let participatedFlag = participated[0]
-    //if participatedFlag !== false and bot is busy - change randomBot
-    for (;;) {
-        if (participatedFlag !== false || bots[randomBot].currentlyBusy === true) {
-            randomBot = Math.floor(Math.random() * bots.length);
-            participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
-            participatedFlag = participated[0]
-        } else {
-            break
+    if (parseFloat(bidAmount) > parseFloat(rangeBID[rangeBID.length - 1])) {
+        console.log(`Bots cant participate in game ${gameID} because bid is too high`)
+    } else {
+        //get amount of bids
+        //get random bot
+        let randomBot = Math.floor(Math.random() * bots.length)
+        //get participant of the game
+        let participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
+        let participatedFlag = participated[0]
+        //if participatedFlag !== false and bot is busy - change randomBot
+        for (;;) {
+            if (participatedFlag !== false || bots[randomBot].currentlyBusy === true) {
+                randomBot = Math.floor(Math.random() * bots.length);
+                participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
+                participatedFlag = participated[0]
+            } else {
+                break
+            }
         }
+        console.log(`Bot Joiner ${bots[randomBot].wallet.address} joined to the game`)
+        bots[randomBot].currentlyBusy = true;
+        contract
+            .connect(bots[randomBot].wallet)
+            .joinGame(gameID, randomNumber, {value: bid.toString()})
+            .then(async () => {
+                bots[randomBot].currentlyBusy = false;
+                console.log(`Bot Joiner ${bots[randomBot].wallet.address} created bid at game ${gameID}: BID amount ETH ${bidAmount}, number: ${randomNumber}`)
+                await updateAddSended(bots[randomBot].range, bidAmount.toString())
+            })
+            .catch(err => {
+                bots[randomBot].currentlyBusy = false;
+                console.error(err)
+            })
     }
-    console.log(`Bot Joiner ${bots[randomBot].wallet.address} joined to the game`)
-    bots[randomBot].currentlyBusy = true;
-    contract
-        .connect(bots[randomBot].wallet)
-        .joinGame(gameID, randomNumber, {value: bid.toString()})
-        .then(async () => {
-            bots[randomBot].currentlyBusy = false;
-            console.log(`Bot Joiner ${bots[randomBot].wallet.address} created bid at game ${gameID}: BID amount ETH ${bidAmount}, number: ${randomNumber}`)
-            await updateAddSended(bots[randomBot].range, bidAmount.toString())
-        })
-        .catch(err => {
-            bots[randomBot].currentlyBusy = false;
-            console.error(err)
-        })
 }
 
 //create game
@@ -133,10 +153,10 @@ const createGame = async () => {
     bots[randomBot].currentlyBusy = true;
     contract
         .connect(bots[randomBot].wallet)
-        .createGame( randomNumber, 10, {value: bidAmount.toString()})
+        .createGame(randomNumber, 255, {value: bidAmount.toString()})
         .then(async () => {
             bots[randomBot].currentlyBusy = false;
-            console.log(`Bot Creator ${bots[randomBot].wallet.address} created new game - BID amount: ETH ${bidAmount}, number: ${randomNumber}`)
+            console.log(`Bot Creator ${bots[randomBot].wallet.address} created new game - BID amount: WEI ${bidAmount}, number: ${randomNumber}`)
             //paste to google sheets
             await updateAddSended(bots[randomBot].range, rangeBID[randomBID])
         })
@@ -235,36 +255,33 @@ const finish = async () => {
     }
 }
 
-
 // every {time} create new game
 console.log(`Start schedule creating games`)
 cron.schedule(cronConfCreate, async () => {
     await createGame()
 })
 
-// every {time} finishing games game
-// setTimeout(() => {
-    console.log(`Start schedule finishing games`)
-    cron.schedule(cronConfFinish, async () => {
-        await finish()
-    })
-// }, 20000)
+// every {time} finish existed games
+console.log(`Start schedule finishing games`)
+cron.schedule(cronConfFinish, async () => {
+    await finish()
+})
 
-console.log("Start listen address for event CreateGame: ", gameAddressTest)
+console.log(`Start listen address in app state ${process.env.APP_STATE} for event CreateGame: `, gameAddress)
 
 //Listen CreateGame event
 contract.on('CreateGame', async (gameId, bid) => {
     //create bid
     setTimeout(async () => {
         await joinGame(gameId, bid)
-    }, 1000 * seconds)
+    }, 1000 * seconds)          //after 10 seconds
     setTimeout(async () => {
         await joinGame(gameId, bid)
-    }, 1000 * seconds + 40000) // after previous 30 sec 
+    }, 1000 * seconds + 40000)  //after 40 seconds
     setTimeout(async () => {
         await joinGame(gameId, bid)
-    }, 1000 * seconds + 70000) // after previous 30 sec 
+    }, 1000 * seconds + 70000)  //after 70 seconds
     setTimeout(async () => {
         await joinGame(gameId, bid)
-    }, 1000 * seconds + 100000) // after previous 30 sec 
+    }, 1000 * seconds + 100000) //after 100 seconds
 })
