@@ -8,8 +8,9 @@ const { gameAddress, gameAddressTest } = require("./utils/constants.js")
 
 const seconds = 10
 const rangeBID = ['0.000001', '0.000002', '0.000003', '0.000004', '0.000005']
-const cronConf = '*/10 * * * *'
-const cronConfFinish = '*/20 * * * * *'
+// const rangeBID = ['20', '0.000002', '0.000003', '0.000004', '200']
+const cronConfCreate = '*/4 * * * *' //every minute
+const cronConfFinish = '*/30 * * * * *'
 
 //Provider Testnet
 const provider = new ethers.providers.JsonRpcProvider(process.env.JSON_RPC_PROVIDER_RINKEBY)
@@ -24,33 +25,43 @@ const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 const bots = [
     //0xAb1F38D350729e74B22E14e3254BaC70A10cb9e1
     {
+        id: 0,
         range: "A2:D2",
         wallet: new ethers.Wallet(process.env.SECOND_PRIVATE_KEY, provider),
-        finished: false
+        finished: false,
+        currentlyBusy: false
     },
     //0x4b3BdC039FC3A0167a63435591E8267fFf21DDd4
     {
+        id: 1,
         range: "A3:D3",
         wallet: new ethers.Wallet(process.env.THIRD_PRIVATE_KEY, provider),
-        finished: false
+        finished: false,
+        currentlyBusy: false
     },
     //0x3d4AFd791676Dc22fA860a0A8B331Cf66f7e4DFF
     {
+        id: 2,
         range: "A4:D4",
         wallet: new ethers.Wallet(process.env.FORTH_PRIVATE_KEY, provider),
-        finished: false
+        finished: false,
+        currentlyBusy: false
     },
     //0xc4d7A5Dd2d9829c23d10dc9C135cb8bC5C115dbD
     {
+        id: 3,
         range: "A5:D5",
         wallet: new ethers.Wallet(process.env.FIFTH_PRIVATE_KEY, provider),
-        finished: false
+        finished: false,
+        currentlyBusy: false
     },
     //0x7D1703B6b84b7f39dBf0d78427Dfc5d1E80F82b2
     {
+        id: 4,
         range: "A6:D6",
         wallet: new ethers.Wallet(process.env.SIXTH_PRIVATE_KEY, provider),
-        finished: false
+        finished: false,
+        currentlyBusy: false
     }
 ]
 
@@ -70,24 +81,33 @@ const joinGame = async (gameID, bid) => {
     const thisGameNumbers = await contract.getNumbers(gameID)
     //get random bot
     let randomBot = Math.floor(Math.random() * bots.length)
-    //get owner of the game
-    const ownerOfGame = await contract.getOwner(gameID)
-    //if owner == randomBot - change randomBot
-    while (bots[randomBot].wallet.address === ownerOfGame) {
-        randomBot = Math.floor(Math.random() * bots.length);
+    //get participant of the game
+    let participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
+    let participatedFlag = participated[0]
+    //if participatedFlag !== false and bot is busy - change randomBot
+    for (;;) {
+        if (participatedFlag !== false || bots[randomBot].currentlyBusy === true) {
+            randomBot = Math.floor(Math.random() * bots.length);
+            participated = await contract.biddersList(gameID, bots[randomBot].wallet.address)
+            participatedFlag = participated[0]
+        } else {
+            break
+        }
     }
-    if (thisGameNumbers.length < 2) {
-        console.log('Bot Joiner joined to the game')
-        contract
-            .connect(bots[randomBot].wallet)
-            .joinGame(gameID, randomNumber, {value: bid.toString()})
-            .then(async () => {
-                console.log(`Bot Joiner ${bots[randomBot].wallet.address} created bid at game ${gameID}: BID amount ETH ${bidAmount}, number: ${randomNumber}`)
-                await updateAddSended(bots[randomBot].range, bidAmount.toString())
-            })
-    } else {
-        console.log(`At game ${gameID} more then 1 bid`)
-    }
+    console.log(`Bot Joiner ${bots[randomBot].wallet.address} joined to the game`)
+    bots[randomBot].currentlyBusy = true;
+    contract
+        .connect(bots[randomBot].wallet)
+        .joinGame(gameID, randomNumber, {value: bid.toString()})
+        .then(async () => {
+            bots[randomBot].currentlyBusy = false;
+            console.log(`Bot Joiner ${bots[randomBot].wallet.address} created bid at game ${gameID}: BID amount ETH ${bidAmount}, number: ${randomNumber}`)
+            await updateAddSended(bots[randomBot].range, bidAmount.toString())
+        })
+        .catch(err => {
+            bots[randomBot].currentlyBusy = false;
+            console.error(err)
+        })
 }
 
 //create game
@@ -98,15 +118,28 @@ const createGame = async () => {
     const randomBID = Math.floor(Math.random() * rangeBID.length)
     const bidAmount = ethers.utils.parseEther(rangeBID[randomBID])
     // get random bot
-    const randomBot = Math.floor(Math.random() * bots.length)
+    let randomBot = Math.floor(Math.random() * bots.length)
+    for (;;) {
+        if (bots[randomBot].currentlyBusy === true) {
+            randomBot = Math.floor(Math.random() * bots.length)
+        } else {
+            break;
+        }
+    }
     console.log(`Bot Creator ${bots[randomBot].wallet.address} creating new game`)
+    bots[randomBot].currentlyBusy = true;
     contract
         .connect(bots[randomBot].wallet)
         .createGame( randomNumber, 10, {value: bidAmount.toString()})
         .then(async () => {
-            console.log(`Bot Creator created new game - BID amount: ETH ${bidAmount}, number: ${randomNumber}`)
+            bots[randomBot].currentlyBusy = false;
+            console.log(`Bot Creator ${bots[randomBot].wallet.address} created new game - BID amount: ETH ${bidAmount}, number: ${randomNumber}`)
             //paste to google sheets
             await updateAddSended(bots[randomBot].range, rangeBID[randomBID])
+        })
+        .catch(err => {
+            bots[randomBot].currentlyBusy = false;
+            console.error(err)
         })
 }
 
@@ -136,64 +169,85 @@ const botGames = async (index) => {
             }
             return arr
         })
+        .catch(err => console.error(err))
 }
 
 const finish = async () => {
-    let botID;
-    for (let i = 0; i < bots.length; i++) {
-        if (bots[i].finished === false) {
-            botID = i;
-            break;
+    //we need to finish the bots in order
+    //so we check if bots finished
+    let arrFinished = bots.filter(v => v.finished === false)
+    //if every bot finished reset the stats
+    if (arrFinished.length === 0) {
+        for (let i = 0; i < bots.length; i++) {
+            bots[i].finished = false;
         }
     }
-    if (botID === undefined && bots[bots.length - 1].finished === true) {
-        for (let j = 0; j < bots.length; j++) {
-             bots[j].finished = false
-        }
-        botID = 0;
-     }
-    console.log(botID)
-    bots[botID].finished = true;
-    botGames(botID)
-        .then((arr) => {
-            return arr.filter((v) => v.claimed === '1' || v.claimed === '2')
-        })
-        .then(async (arr) => {
-            console.log(arr)
-            for (let i = 0; i < arr.length; i++) {
-                if (arr[i].claimed === '1') {
-                    await contract.connect(bots[botID].wallet).claim(arr[i].currentGameId)
-                    const prizeList = await contract.prizeList(bots[botID].wallet.address, arr[i].currentGameId)
-                    if (prizeList[2] !== undefined) {
-                        const prize = prizeList[2].toString()
-                        await updateAddWinned(bots[botID].range, ethers.utils.formatEther(prize)) 
+    //check if not finished bots not busy
+    let arrNotFinishedAndNotBusy = bots.filter(v => v.finished === false && v.currentlyBusy === false)
+    //get first
+    let botID = arrNotFinishedAndNotBusy[0].id;
+    //if bot with conditions exist
+    if (botID != undefined) {
+        //bot is busy now
+        bots[botID].currentlyBusy = true;
+        //get all bots games
+        botGames(botID)
+            .then((arr) => {
+                //filter games 
+                //the game is finished already and user allowed to claim prize
+                //or the game is ready for finish
+                return arr.filter((v) => v.claimed === '1' || v.claimed === '2')
+            })
+            .then(async (arr) => {
+                console.log(`Bot ${bots[botID].wallet.address} finishing his games if exists`)
+                for (let i = 0; i < arr.length; i++) {
+                    //if we can claim -> claim
+                    //else finish
+                    if (arr[i].claimed === '1') {
+                        await contract.connect(bots[botID].wallet).claim(arr[i].currentGameId)
+                        const prizeList = await contract.prizeList(bots[botID].wallet.address, arr[i].currentGameId)
+                        if (prizeList[2] !== undefined) {
+                            const prize = prizeList[2].toString()
+                            await updateAddWinned(bots[botID].range, ethers.utils.formatEther(prize)) 
+                        }
+                        console.log(`Bot ${bots[botID].wallet.address} claimed in game ${arr[i].currentGameId}`)
+                    } else if (arr[i].claimed === '2'){
+                        await contract.connect(bots[botID].wallet).finishGame(arr[i].currentGameId)
+                        console.log(`Bot ${bots[botID].wallet.address} finished game ${arr[i].currentGameId}`)
                     }
-                    console.log(`Bot ${bots[botID].wallet.address} claimed in game ${arr[i].currentGameId}`)
-                } else {
-                    await contract.connect(bots[botID].wallet).finishGame(arr[i].currentGameId)
-                    console.log(`Bot ${bots[botID].wallet.address} finished game ${arr[i].currentGameId}`)
                 }
-            }
-        })
-        .then(() => {
-            console.log(`Finish is done`)
-        })
+            })
+            //bot finished and currently busy
+            .then(() => {
+                bots[botID].finished = true;
+                bots[botID].currentlyBusy = false;
+                console.log(`Finishing for ${bots[botID].wallet.address} is done`)
+            })
+            .catch(err => {
+                bots[botID].currentlyBusy = false;
+                console.error(err)
+            })
+    } else {
+        console.log(`For finish every bot is busy`)
+    }
 }
 
-createGame()
-cron.schedule(cronConfFinish, async () => {
-    console.log(`Start finish`)
-    await finish()
+
+// every {time} create new game
+console.log(`Start schedule creating games`)
+cron.schedule(cronConfCreate, async () => {
+    await createGame()
 })
 
-//every 10 min create new game
-//console.log(`Start schedule creating games`)
-// cron.schedule(cronConf, async () => {
-    // console.log("10 min")
-// })
+// every {time} finishing games game
+// setTimeout(() => {
+    console.log(`Start schedule finishing games`)
+    cron.schedule(cronConfFinish, async () => {
+        await finish()
+    })
+// }, 20000)
 
-
-console.log("Start listen address: ", gameAddressTest)
+console.log("Start listen address for event CreateGame: ", gameAddressTest)
 //Listen CreateGame event
 //get id of the game and wait 100 seconds
 //check if after 100 seconds bids not exists
@@ -204,4 +258,13 @@ contract.on('CreateGame', async (gameId, bid) => {
     setTimeout(async () => {
         await joinGame(gameId, bid)
     }, 1000 * seconds)
+    setTimeout(async () => {
+        await joinGame(gameId, bid)
+    }, 1000 * seconds + 40000) // after previous 30 sec 
+    setTimeout(async () => {
+        await joinGame(gameId, bid)
+    }, 1000 * seconds + 70000) // after previous 30 sec 
+    setTimeout(async () => {
+        await joinGame(gameId, bid)
+    }, 1000 * seconds + 100000) // after previous 30 sec 
 })
