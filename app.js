@@ -16,7 +16,7 @@ const {
  } = require("./utils/constants.js")
 
 const seconds = 10
-const cronConfCreate = '*/4 * * * *'        //every 4 minute
+const cronConfCreate = '*/3 * * * *'        //every 3 minute
 const cronConfFinish = '*/30 * * * * *'     //every 30 seconds
 
 let provider
@@ -153,7 +153,7 @@ const createGame = async () => {
     bots[randomBot].currentlyBusy = true;
     contract
         .connect(bots[randomBot].wallet)
-        .createGame(randomNumber, 255, {value: bidAmount.toString()})
+        .createGame(randomNumber, 0, {value: bidAmount.toString()})
         .then(async () => {
             bots[randomBot].currentlyBusy = false;
             console.log(`Bot Creator ${bots[randomBot].wallet.address} created new game - BID amount: WEI ${bidAmount}, number: ${randomNumber}`)
