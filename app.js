@@ -168,7 +168,7 @@ const createGame = async () => {
 
 const botGames = async (index) => {
     return contract
-        .getUserGames(bots[index].wallet.address)
+        .getUserGames(bots[index].wallet.address, {gasLimit: 50000000})
         .then((res) => {
             let arr = []
             let counter = 0;
@@ -219,6 +219,7 @@ const finish = async () => {
                 //filter games 
                 //the game is finished already and user allowed to claim prize
                 //or the game is ready for finish
+                console.log(arr.length)
                 return arr.filter((v) => v.claimed === '1' || v.claimed === '2')
             })
             .then(async (arr) => {
