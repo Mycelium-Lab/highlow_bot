@@ -219,7 +219,6 @@ const finish = async () => {
                 //filter games 
                 //the game is finished already and user allowed to claim prize
                 //or the game is ready for finish
-                console.log(arr.length)
                 return arr.filter((v) => v.claimed === '1' || v.claimed === '2')
             })
             .then(async (arr) => {
@@ -248,6 +247,7 @@ const finish = async () => {
                 console.log(`Finishing for ${bots[botID].wallet.address} is done`)
             })
             .catch(err => {
+                bots[botID].finished = true;
                 bots[botID].currentlyBusy = false;
                 console.error(err)
             })
